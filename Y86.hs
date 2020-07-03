@@ -178,19 +178,19 @@ flattern' (x :> y) = concat [flattern' x, flattern' y]
 flattern' x        = [x]
 
 optimise :: AsmExpr -> AsmExpr
-optimise (Irmovq i r :> Pushq d1 :> Popq d2 :> xs)       = Irmovq i d2 :> optimise xs
-optimise (Irmovq i1 r1 :> Irmovq i2 r2 :> xs) | r1 == r2 = Irmovq i2 r2 :> optimise xs
-optimise (Irmovq i1 r1 :> Rrmovq r2 r3 :> xs) | r1 == r3 = Irmovq i1 r3 :> optimise xs
-optimise (Popq r1 :> Rrmovq r2 r3 :> xs)                 = Popq r3 :> optimise xs
-optimise (Pushq i :> Popq j :> xs)            | i == j   = optimise xs
-optimise (Popq i :> Pushq j :> xs)            | i == j   = Mrmovq (RPtr 42) j :> optimise xs 
-optimise (Pushq i :> Popq j :> xs)                       = Rrmovq i j :> optimise xs
-optimise (Jmp i :> Jmp j :> xs)                          = Jmp i :> optimise xs
-optimise (Jmp i :> Label s :> xs)             | i == s   = Label s :> optimise xs
-optimise (Nop :> y)                                      = optimise y
-optimise (x :> Nop)                                      = x
-optimise (x :> xs)                                       = x :> optimise xs 
-optimise  x                                              = x
+optimise (Irmovq i r :> Pushq d1 :> Popq d2 :> xs) | r == d1  = Irmovq i d2 :> optimise xs
+optimise (Irmovq i1 r1 :> Irmovq i2 r2 :> xs)      | r1 == r2 = Irmovq i2 r2 :> optimise xs
+optimise (Irmovq i1 r1 :> Rrmovq r2 r3 :> xs)      | r1 == r3 = Irmovq i1 r3 :> optimise xs
+optimise (Popq r1 :> Rrmovq r2 r3 :> xs)                      = Popq r3 :> optimise xs
+optimise (Pushq i :> Popq j :> xs)                 | i == j   = optimise xs
+optimise (Popq i :> Pushq j :> xs)                 | i == j   = Mrmovq (RPtr 42) j :> optimise xs 
+optimise (Pushq i :> Popq j :> xs)                            = Rrmovq i j :> optimise xs
+optimise (Jmp i :> Jmp j :> xs)                               = Jmp i :> optimise xs
+optimise (Jmp i :> Label s :> xs)                  | i == s   = Label s :> optimise xs
+optimise (Nop :> y)                                           = optimise y
+optimise (x :> Nop)                                           = x
+optimise (x :> xs)                                            = x :> optimise xs 
+optimise  x                                                   = x
 
 labOpt :: AsmExpr -> AsmExpr -> AsmExpr
 labOpt old (Label i :> Jmp j :> xs)   = labOpt ((chJmp i j old) :> Jmp j) (chJmp i j xs)
