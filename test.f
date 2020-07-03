@@ -1,0 +1,7 @@
+:dup {a} a a;
+:del {a} _;
+:swap {a b} a b;
+
+:fib dup 0 == IF {_} {dup 1 == IF {_} {dup 1 - fib swap 2 - fib +}};
+
+2 fib 1 fib 0 fib
