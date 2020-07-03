@@ -103,6 +103,7 @@ codeGen (P.Closure i args e) = do
     c <- codeGen' (renameClosure 2 args e)
     return $ Func $ Label i :> postCall :> (codeMap (\(i,_) -> Popq i) $ zip [2..] args) :> c :> preReturn :> Retq
 
+
 codeGen (BinOP1' i j op xs) = codeGen (BinOP1 i j op P.:> xs)
 
 codeGen (BinOP2' j op xs) = codeGen (BinOP2 j op P.:> xs)
@@ -181,9 +182,11 @@ optimise :: AsmExpr -> AsmExpr
 optimise (Irmovq i r :> Pushq d1 :> Popq d2 :> xs) | r == d1  = Irmovq i d2 :> optimise xs
 optimise (Irmovq i1 r1 :> Irmovq i2 r2 :> xs)      | r1 == r2 = Irmovq i2 r2 :> optimise xs
 optimise (Irmovq i1 r1 :> Rrmovq r2 r3 :> xs)      | r1 == r3 = Irmovq i1 r3 :> optimise xs
+optimise (Mrmovq m r1 :> Rrmovq r2 r3 :> xs)       | r1 == r2 = Mrmovq m r3  :> optimise xs
 optimise (Popq r1 :> Rrmovq r2 r3 :> xs)                      = Popq r3 :> optimise xs
 optimise (Pushq i :> Popq j :> xs)                 | i == j   = optimise xs
 optimise (Popq i :> Pushq j :> xs)                 | i == j   = Mrmovq (RPtr 42) j :> optimise xs 
+optimise (Popq i :> Popq k :> Pushq j :> xs)       | i == j   = Mrmovq (RPtr 42) j :> Pushq k :> optimise xs 
 optimise (Pushq i :> Popq j :> xs)                            = Rrmovq i j :> optimise xs
 optimise (Jmp i :> Jmp j :> xs)                               = Jmp i :> optimise xs
 optimise (Jmp i :> Label s :> xs)                  | i == s   = Label s :> optimise xs
