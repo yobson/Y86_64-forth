@@ -135,9 +135,7 @@ codeGen (e1 P.:> e2) = do
 codeGen (P.Variable i) | (head i) `elem` ['0'..'9'] = return $ Code $ Pushq $ read i
                        | otherwise                  = return $ Code $ Callq i
 
-codeGen' e = codeGen e >>= return . ret
-  where ret (Func i) = i
-        ret (Code i) = i
+codeGen' e = codeGen e >>= return . unAsm
 
 primCodeGen i = Popq 0 :> Popq 1 :> primCodeGen' i :> Pushq 0
 
