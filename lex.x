@@ -17,7 +17,7 @@ tokens :-
   "}"            { \s -> CloseBrac }
   "_"            { \s -> Nop }
   "IF"           { \s -> If }
-  $alpha+        { Ident }
+  $alpha+$digit* { Ident }
   $symb{1,2}     { Prim }
   $digit+        { Number . read }
 
