@@ -1,9 +1,8 @@
-:dup {a} a a;
-:del {a} _;
-:swap {a b} a b;
-:rot2 swap;
-:rot3 {a b c} a c b;
+#include "lib.f"
 
+-- There isn't enough space for both of these in the emulator
 :fib dup 0 == IF {_} {dup 1 == IF {_} {dup 1 - fib swap 2 - fib +}};
 
-2 fib 1 fib 0 fib
+--:fib dup 0 == IF {_} {dup 1 == IF {0 TMP !} {1 - fib2 dup TMP @ + swap TMP !}};
+
+9 fib

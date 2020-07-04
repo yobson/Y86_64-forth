@@ -17,6 +17,8 @@ tokens :-
   "}"            { \s -> CloseBrac }
   "_"            { \s -> Nop }
   "IF"           { \s -> If }
+  "!"            { \s -> Set }
+  "@"            { \s -> Deref }
   $alpha+$digit* { Ident }
   $symb{1,2}     { Prim }
   $digit+        { Number . read }
@@ -30,6 +32,8 @@ data Token = Colon
            | Ident String
            | Prim String
            | If
+           | Set
+           | Deref
            | Nop
            deriving (Eq,Show)
 

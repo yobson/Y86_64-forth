@@ -1,7 +1,7 @@
 
 .PHONY: FORTH
 FORTH:
-	cabal -O2 v2-build;\
+	cabal -O2 -j v2-build;\
 	[ -f ./FORTH ] && rm FORTH;\
 	find ./dist-newstyle/ -type f -name FORTH -exec cp {} ./ \;
 

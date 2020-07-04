@@ -38,6 +38,7 @@ Because learning a language from grammars is not always ideal, here is an exampl
 
 9 fib
 ```
+For a more comprehensive show of the language, see `test.f`
 
 ## Using
 ### Building
@@ -45,7 +46,7 @@ You will need a modern version of GHC and cabal. Simply run `make` in the code d
 
 ### The Interpreter
 - To use the interpreter (I assume a unix system), simply run `rlwrap ./FORTH -i` or `rlwrap ./FORTH --interactive`.
-- You can give a file as input and it will load in the functions defined in it and prepare the stack.
+- You can give a files as input and it will load in the functions defined in them and prepare the stack.
 
 ### The Compiler
 Assuming your code is in the file `code.f`, run `./FORTH -o OutFile code.f`. If you do not specify an output, the code
@@ -54,3 +55,9 @@ will be printed to stdout. You can turn off optimisation with `-n` or `--no-opt`
 To run the code, copy it into
 [this simulator](http://www.cs.ox.ac.uk/people/alex.rogers/Y86-64/) and hit run. The stop of the stack at the end of the
 simulation is denoted by `< RSP` and the bottom is at `0x01f8`
+
+To test the compiler, run `./FORTH test.f`
+
+## Quirks
+The order you give the files to the compiler (for now) matters if you don't use `#include file` directives.
+If file `A` relies on functions in file `B`, write `./FORTH B A`

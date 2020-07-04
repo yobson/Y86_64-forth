@@ -5,24 +5,54 @@ import qualified Lex as L
 import Parse
 import qualified Y86 as Y
 import System.Environment
+import Control.Monad.State.Lazy
+import Control.Exception (evaluate)
+import System.Process 
 
 type Ident = String
 
 
 type Stack = [Int]
 type Env   = [(Ident, Expr)]
+type Mem   = [(Ident, Int)]
 
-eval :: Expr -> Stack -> Env -> (Stack,Env)
-eval (Nop)                 xs  env = (xs,env)
-eval (Number i)            xs  env = (i:xs,env)
-eval cl@(Closure i args e) xs  env = (xs, elab env i cl)
-eval (Prim i)              xs  env = (primEval i xs, env)
+type M a = State Mem a
+
+
+instance Semigroup (Expr) where
+  (<>) (x :> xs) e = x :> (xs <> e)
+  (<>)  x        e = x :> e
+
+(//) :: [a] -> ((a -> Bool), a) -> [a]
+[]     // (f, a) = [a]
+(x:xs) // (f, a) | f x       = a : xs
+                | otherwise = x : (xs // (f, a))
+
+infixl 5 //
+
+eqTup b (a,_) = a == b
+
+findM :: Ident -> M Int
+findM i = get >>= return . snd . head . filter (eqTup i)
+
+set :: Ident -> Int -> M ()
+set ide i = modify (// (eqTup ide, (ide, i)))
+
+eval :: Expr -> Stack -> Env -> M (Stack,Env)
+eval (Nop)                 xs  env = return $ (xs,env)
+eval (Number i)            xs  env = return $ (i:xs,env)
+eval cl@(Closure i args e) xs  env = return $ (xs, elab env i cl)
+eval (Prim i)              xs  env = return $ (primEval i xs, env)
 eval (If e1 e2)         (0:xs) env = eval e1 xs env
 eval (If e1 e2)         (_:xs) env = eval e2 xs env
-eval (e1 :> e2)            xs  env = let (s1,env1) = eval e1 xs env in eval e2 s1 env1
+eval (e1 :> e2)            xs  env = eval e1 xs env >>= uncurry (eval e2)
+eval (Deref i)             xs  env = findM i >>= \x -> return (x:xs, env)
+eval (Set i)            (x:xs) env = set i x >> return (xs,env)
 eval (Variable i)          xs  env = case (find i env) of
-                                       (Closure i args expr) -> let (env',s) = rename args xs env in 
-                                                                let (s',_)    = eval expr s env'   in (s', env)
+                                       (Closure i args expr) -> do 
+                                              let (env',s) = rename args xs env
+                                              (s',_)       <- eval expr s env' 
+                                              return (s', env)
                                        (e)                   -> eval e xs env
 
 data Arch = Y86
@@ -66,7 +96,7 @@ data Plan = Interactive | Compile deriving (Show, Eq)
 
 data CompileSettings = CompSet { mode       :: Plan
                                , outputFile :: Maybe FilePath
-                               , inFile     :: Maybe FilePath
+                               , inFile     :: Maybe [FilePath]
                                , opt        :: Bool
                                }
                             deriving (Show)
@@ -78,8 +108,10 @@ initialSettings = CompSet Compile Nothing Nothing True
 turnOffOpt, setOutFile, setInFile, setRepl :: CompileSettings -> String -> CompileSettings
 turnOffOpt s _ = s {opt        = False}
 setOutFile s f = s {outputFile = Just f}
-setInFile  s f = s {inFile     = Just f}
 setRepl    s _ = s {mode       = Interactive}
+setInFile  s f = case inFile s of
+                    (Nothing) -> s {inFile = Just [f]}
+                    (Just xs) -> s {inFile = Just (xs ++ [f])}
 
 extractHelp :: Arg -> String
 extractHelp f@(_, h, _) = concat ["--", long f, "\t-", short f, "\t", h]
@@ -120,21 +152,42 @@ parseArgs (('-':x:xs):ys)   c = parseArgs [('-':xs)] $ findMatch short globalArg
 parseArgs ([]:xs)           c = parseArgs xs c
 parseArgs (x:xs)            c = parseArgs xs (setInFile c x)
 
-runLoop :: Stack -> Env -> IO ()
-runLoop s e = do
+printMem' :: Mem -> IO ()
+printMem' []         = putStrLn "[]"
+printMem' [(i,v)]    = putStr i >> putStr " := " >> putStr (show v) >> putStrLn "]"
+printMem' ((i,v):xs) = putStr i >> putStr " := " >> putStr (show v) >> putStr ", " >> printMem' xs
+
+printMem xs = putStr "[" >> printMem' xs
+
+runLoop :: Stack -> Env -> Mem -> IO ()
+runLoop s e mem = do
       putStr "> "
       expr <- getLine >>= return . buildExpr . L.tokenise
-      let (s',e') = eval expr s e
-      print s'
-      runLoop s' e'
+      let ((s',e'), m) = runState (eval expr s e) mem
+      putStr "Stack: " >> print s'
+      putStr $ if (length s' < 2) then "" else "        ^ Top\n"
+      if (not $ null m) then putStr "VARs: " >> printMem m >> runLoop s' e' m
+      else runLoop s' e' m
 
-loadFile :: Maybe FilePath -> IO String
-loadFile (Just f) = readFile f
-loadFile Nothing  = error "No input"
+loadFiles :: Maybe [FilePath] -> IO [String]
+loadFiles (Just f) = mapM (\x -> readProcess "cpp" ["-P", "-w", x] []) f
+loadFiles Nothing  = error "No input"
 
 export :: Maybe FilePath -> String -> IO ()
 export (Just f) s = writeFile f s
 export Nothing  s = putStrLn s
+
+eval' ex s e = eval (buildExpr $ L.tokenise ex) s e
+
+foldEval :: [String] -> Stack -> Env -> M (Stack, Env)
+foldEval []     s e = error "No input"
+foldEval [x]    s e = eval' x s e
+foldEval (x:xs) s e = eval' x s e >>= uncurry (foldEval xs)
+
+concatExpr :: [Expr] -> Expr
+concatExpr [] = error "Empty Expression"
+concatExpr [x] = x
+concatExpr (x:xs) = x <> (concatExpr xs)
 
 main = do 
   hSetBuffering stdout NoBuffering
@@ -143,12 +196,12 @@ main = do
   else do
     let settings = parseArgs args initialSettings
     if (mode settings == Interactive) then
-      if (inFile settings == Nothing) then runLoop [] []
+      if (inFile settings == Nothing) then runLoop [] [] []
       else do
-        file <- loadFile (inFile settings)
-        let (stack,env) = eval (buildExpr $ L.tokenise file) [] []
-        runLoop stack env
+        files <- loadFiles (inFile settings)
+        let ((stack,env),m) = runState (foldEval files [] []) []
+        runLoop stack env m
     else do
-      file <- loadFile (inFile settings)
-      out <- return file >>= return . buildExpr . L.tokenise >>= return . Y.genCode (opt settings)
+      files <- loadFiles (inFile settings)
+      out <- return files >>= return . concatExpr . map (buildExpr . L.tokenise) >>= return . Y.genCode (opt settings)
       export (outputFile settings) out

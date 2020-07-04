@@ -3,10 +3,13 @@
 module Y86 (genCode) where
 
 import qualified Parse as P
+import Data.Bifunctor
 import Control.Monad.State.Lazy
 
 type Reg = Int
 data Mem = RPtr Reg | Absolute Int deriving (Show, Eq)
+
+type St = (Int, [(String, Int)])
 
 data Asm = Func AsmExpr | Code AsmExpr
 unAsm (Func x) = x
@@ -61,6 +64,37 @@ pattern BinOP2' j op xs = (P.Number j P.:> (P.Prim op P.:> xs))
 postCall = Subq 8 69 :> Popq 100 :> Rmmovq 100 (RPtr 69)
 preReturn = Mrmovq (RPtr 69) 100 :> Pushq 100 :> Addq 8 69
 
+find' :: St -> String -> Maybe Int
+find' (_, [])    s = Nothing
+find' (_,((x,i):xs)) s | x == s    = Just i
+                       | otherwise = find' (undefined, xs) s
+
+
+find :: St -> String -> Int
+find xs s = case find' xs s of
+              Nothing  -> error $ "Undefined variable " ++ s
+              (Just x) -> x
+
+
+eqTup b (a,_) = a == b
+
+getVar :: String -> State St Asm
+getVar s = get >>= \xs -> return $ Code $ Irmovq (find xs s) 0 :> Mrmovq (RPtr 0) 0 :> Pushq 0
+
+setVar :: String -> State St Asm
+setVar s = get >>= \xs -> case (find' xs s) of
+                                (Nothing) -> newVar s >>= (\x -> return $ Code $ Popq 0 :> Irmovq x 2 :> Rmmovq 0 (RPtr 2))
+                                (Just x)  -> return $ Code $ Popq 0 :> Irmovq x 2 :> Rmmovq 0 (RPtr 2)
+
+newVar :: String -> State St Int
+newVar s = nextVar >>= (\x -> modify (bimap id ((s,x):)) >> return x)
+
+nextVar :: State St Int
+nextVar = get >>= return . f
+  where f (_,[])       = 0x200
+        f (_,(x,v):xs) = v + 8
+
+
 #ifndef DEBUG
 instance Show AsmExpr where
   show Nop            = []
@@ -85,16 +119,16 @@ deriving instance Show AsmExpr
 #endif
 
 genCode :: Bool -> P.Expr -> String
-genCode opt e = show $ addHardCode $ (if opt then fullOpt else id) $ unAsm $ fst $ runState (codeGen e) 0
+genCode opt e = show $ addHardCode $ (if opt then fullOpt else flattern) $ unAsm $ fst $ runState (codeGen e) (0,[])
   
 codeMap :: (a -> AsmExpr) -> [a] -> AsmExpr
 codeMap f [] = Nop
 codeMap f xs = foldr1 (:>) $ map f xs
 
-codeGen :: P.Expr -> State Int Asm
+codeGen :: P.Expr -> State St Asm
 codeGen (P.Nop) = return $ Code Nop
 
-codeGen (P.Closure i args e P.:> xs) | length' e < 5 = do 
+codeGen (P.Closure i args e P.:> xs) | length' e < 8 && notRec e i = do 
   let c = renameClosure 2 args e
   let c' = foldr (\x xs -> P.CodePop x P.:> xs) P.Nop [2..(1 + length args)] P.:> c
   codeGen (inline i c' xs)
@@ -117,6 +151,9 @@ codeGen (P.Number i) = return $ Code $ Irmovq i 0 :> Pushq 0
 codeGen (P.Prim i) = return $ Code $ primCodeGen i
 
 codeGen (P.CodePop i) = return $ Code $ Popq i
+
+codeGen (P.Set i) = setVar i
+codeGen (P.Deref i) = getVar i
 
 codeGen (P.If e1 e2) = do 
     exp1 <- codeGen' e1
@@ -146,22 +183,22 @@ primCodeGen' "==" = Subq 1 0
 
 renameClosure :: Int -> [String] -> P.Expr -> P.Expr
 renameClosure i [] e = e
-renameClosure i (x:xs) e = renameClosure (i+1) xs $ P.foldExpr P.Number (varReplace i x) P.Closure (P.:>) P.Prim P.If P.Nop P.CodePop e
+renameClosure i (x:xs) e = renameClosure (i+1) xs $ P.foldExpr P.Number (varReplace i x) P.Closure (P.:>) P.Prim P.If P.Nop P.CodePop P.Deref P.Set e
 
 varReplace :: Int -> String -> String -> P.Expr
 varReplace i x y | x == y    = P.Variable (show i)
                  | otherwise = P.Variable y
 
 inline :: String -> P.Expr -> P.Expr -> P.Expr
-inline i e = P.foldExpr P.Number sub P.Closure (P.:>) P.Prim P.If P.Nop P.CodePop
+inline i e = P.foldExpr P.Number sub P.Closure (P.:>) P.Prim P.If P.Nop P.CodePop P.Deref P.Set
   where sub s | s == i    = e
               | otherwise = P.Variable s
 
 ifFunc (Func i) = True
 ifFunc _        = False
 
-mkLabel :: State Int String
-mkLabel = modify (+1) >> get >>= (\x -> return $ "label" ++ show x)
+mkLabel :: State St String
+mkLabel = modify (bimap (+1) id) >> get >>= (\x -> return $ "label" ++ (show $ fst x))
 
 fullOpt = dropUntilSame . iterate (optimise . flattern . labOpt Nop)
 
@@ -186,7 +223,6 @@ optimise (Mrmovq m r1 :> Rrmovq r2 r3 :> xs)       | r1 == r2 = Mrmovq m r3  :> 
 optimise (Popq r1 :> Rrmovq r2 r3 :> xs)                      = Popq r3 :> optimise xs
 optimise (Pushq i :> Popq j :> xs)                 | i == j   = optimise xs
 optimise (Popq i :> Pushq j :> xs)                 | i == j   = Mrmovq (RPtr 42) j :> optimise xs 
-optimise (Popq i :> Popq k :> Pushq j :> xs)       | i == j   = Mrmovq (RPtr 42) j :> Pushq k :> optimise xs 
 optimise (Pushq i :> Popq j :> xs)                            = Rrmovq i j :> optimise xs
 optimise (Jmp i :> Jmp j :> xs)                               = Jmp i :> optimise xs
 optimise (Jmp i :> Label s :> xs)                  | i == s   = Label s :> optimise xs
@@ -211,13 +247,18 @@ chJmp _ _  x               = x
 unUsedLabel :: String -> AsmExpr -> Bool
 unUsedLabel s (Jmp i)   = s /= i
 unUsedLabel s (Je  i)   = s /= i
-unUsedLabel s (Callq i) = s /= i
+unUsedLabel s (Callq i) = False
 unUsedLabel s (x :> xs) = unUsedLabel s x && unUsedLabel s xs
 unUsedLabel _ x         = True
 
 length' (x P.:> y) = 1 + length' y
 length' (P.If x y) = 1 + length' x + length' y
 length' x = 1
+
+false = const False
+
+notRec :: P.Expr -> String -> Bool
+notRec e i = not $ P.foldExpr false (== i) (const $ const false) (||) false (const false) False false false false e 
 
 topCode :: AsmExpr
 topCode = HardCode ".pos 0\n\tirmovq stack, %rsp\n\tirmovq base, %rbp" :> Irmovq 8 8 :> Jmp "main" :> Nop

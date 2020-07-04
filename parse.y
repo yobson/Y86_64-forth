@@ -18,6 +18,8 @@ import qualified Lex as L
       prim  { L.Prim $$ }
       if    { L.If }
       nop   { L.Nop }
+      '!'   { L.Set }
+      '@'   { L.Deref }
 
 %%
 
@@ -28,6 +30,8 @@ SExp : num                          { Number $1 }
      | id                           { Variable $1 }
      | prim                         { Prim $1 }
      | nop                          { Nop }
+     | id '!'                       { Set $1 }
+     | id '@'                       { Deref $1 }
      | if '{' Exp '}' '{' Exp '}'   { If $3 $6 }
      | ':' id Exp ';'               { Closure $2 [] $3 }
      | ':'  id '{' List '}' Exp ';' { Closure $2 $4 $6 }
@@ -52,18 +56,23 @@ data Expr = Number Int
           | If Expr Expr
           | CodePop Int -- For codeGen
           | Nop
+          | Deref Ident
+          | Set Ident
           deriving (Show)
 
 foldExpr :: (Int -> b) -> (Ident -> b) -> (Ident -> [Ident] -> b -> b) -> (b -> b -> b)
-         -> (Ident -> b) -> (b -> b -> b) -> b -> (Int -> b) -> Expr -> b
-foldExpr n v c j p f o cp (Number i) = n i
-foldExpr n v c j p f o cp (Variable i) = v i
-foldExpr n v c j p f o cp (Closure i args e) = c i args (foldExpr n v c j p f o cp e)
-foldExpr n v c j p f o cp (e1 :> e2) = j (foldExpr n v c j p f o cp e1) (foldExpr n v c j p f o cp e2)
-foldExpr n v c j p f o cp (Prim i)   = p i
-foldExpr n v c j p f o cp (If e1 e2) = f (foldExpr n v c j p f o cp e1) (foldExpr n v c j p f o cp e2)
-foldExpr n v c j p f o cp (Nop) = o
-foldExpr n v c j p f o cp (CodePop i) = cp i
+         -> (Ident -> b) -> (b -> b -> b) -> b -> (Int -> b) -> (Ident -> b)
+         -> (Ident -> b) -> Expr -> b
+foldExpr n v c j p f o cp d s (Number i) = n i
+foldExpr n v c j p f o cp d s (Variable i) = v i
+foldExpr n v c j p f o cp d s (Closure i args e) = c i args (foldExpr n v c j p f o cp d s e)
+foldExpr n v c j p f o cp d s (e1 :> e2) = j (foldExpr n v c j p f o cp d s e1) (foldExpr n v c j p f o cp d s e2)
+foldExpr n v c j p f o cp d s (Prim i)   = p i
+foldExpr n v c j p f o cp d s (If e1 e2) = f (foldExpr n v c j p f o cp d s e1) (foldExpr n v c j p f o cp d s e2)
+foldExpr n v c j p f o cp d s (Nop) = o
+foldExpr n v c j p f o cp d s (CodePop i) = cp i
+foldExpr n v c j p f o cp d s (Deref i) = d i
+foldExpr n v c j p f o cp d s (Set i) = s i
 
 
 }

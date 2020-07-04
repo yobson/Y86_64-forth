@@ -22,7 +22,8 @@ executable FORTH
   -- other-extensions:
   build-depends:       base >=4.14 && <4.15,
                        mtl,
-                       array
+                       array,
+                       process
   -- hs-source-dirs:
   build-tool-depends:  alex:alex, happy:happy
   default-language:    Haskell2010
