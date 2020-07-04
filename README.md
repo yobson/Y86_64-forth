@@ -45,7 +45,7 @@ For a more comprehensive show of the language, see `test.f`
 You will need a modern version of GHC and cabal. Simply run `make` in the code directory.
 
 ### The Interpreter
-- To use the interpreter (I assume a unix system), simply run `rlwrap ./FORTH -i` or `rlwrap ./FORTH --interactive`.
+- To use the interpreter (I assume a unix system), simply run `./FORTH -i` or `./FORTH --interactive`.
 - You can give a files as input and it will load in the functions defined in them and prepare the stack.
 
 ### The Compiler

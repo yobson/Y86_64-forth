@@ -98,17 +98,19 @@ data CompileSettings = CompSet { mode       :: Plan
                                , outputFile :: Maybe FilePath
                                , inFile     :: Maybe [FilePath]
                                , opt        :: Bool
+                               , rlwrap     :: Bool
                                }
                             deriving (Show)
 
 type Arg = (Argument, HelpText, CompileSettings -> String -> CompileSettings)
 
-initialSettings = CompSet Compile Nothing Nothing True
+initialSettings = CompSet Compile Nothing Nothing True True
 
 turnOffOpt, setOutFile, setInFile, setRepl :: CompileSettings -> String -> CompileSettings
 turnOffOpt s _ = s {opt        = False}
 setOutFile s f = s {outputFile = Just f}
 setRepl    s _ = s {mode       = Interactive}
+turnOffRL  s _ = s {rlwrap     = False}
 setInFile  s f = case inFile s of
                     (Nothing) -> s {inFile = Just [f]}
                     (Just xs) -> s {inFile = Just (xs ++ [f])}
@@ -131,7 +133,8 @@ long ((Switch _),_,_)  = ""
 
 globalArgs = [ (Flag "interactive", "Run Repl", setRepl)
              , (Input "output", "Set output file name", setOutFile)
-             , (Flag "no-opt", "Turn off optimisation", turnOffOpt)
+             , (Flag "opt-off", "Turn off optimisation", turnOffOpt)
+             , (Flag "rlwrap-off", "Turn off rlwrap", turnOffRL)
              ]
 
 match :: Arg -> [String] -> CompileSettings -> CompileSettings
@@ -191,17 +194,21 @@ concatExpr (x:xs) = x <> (concatExpr xs)
 
 main = do 
   hSetBuffering stdout NoBuffering
+  hSetBuffering stdin LineBuffering
   args <- getArgs 
   if (args == ["--help"] || args == ["-h"]) then putStrLn $ printHelp globalArgs
   else do
     let settings = parseArgs args initialSettings
     if (mode settings == Interactive) then
-      if (inFile settings == Nothing) then runLoop [] [] []
+      if (rlwrap settings) then 
+        (callCommand $ "rlwrap ./FORTH " ++ (foldr (\x xs -> concat [x, " ", xs]) [] args) ++ "-r")
+      else 
+        if (inFile settings == Nothing) then runLoop [] [] []
+        else do
+          files <- loadFiles (inFile settings)
+          let ((stack,env),m) = runState (foldEval files [] []) []
+          runLoop stack env m
       else do
         files <- loadFiles (inFile settings)
-        let ((stack,env),m) = runState (foldEval files [] []) []
-        runLoop stack env m
-    else do
-      files <- loadFiles (inFile settings)
-      out <- return files >>= return . concatExpr . map (buildExpr . L.tokenise) >>= return . Y.genCode (opt settings)
-      export (outputFile settings) out
+        out <- return files >>= return . concatExpr . map (buildExpr . L.tokenise) >>= return . Y.genCode (opt settings)
+        export (outputFile settings) out
