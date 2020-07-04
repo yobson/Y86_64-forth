@@ -44,11 +44,13 @@ Because learning a language from grammars is not always ideal, here is an exampl
 You will need a modern version of GHC and cabal. Simply run `make` in the code directory.
 
 ### The Interpreter
-To use the interpreter (I assume a unix system), simply run `rlwrap ./FORTH`. Do not be thrown by the lack of prompt!
+- To use the interpreter (I assume a unix system), simply run `rlwrap ./FORTH -i` or `rlwrap ./FORTH --interactive`.
+- You can give a file as input and it will load in the functions defined in it and prepare the stack.
 
 ### The Compiler
-I am going to completely change how the compiler is used (because it is a little inconvenient at time of writing) so watch this space.
+Assuming your code is in the file `code.f`, run `./FORTH -o OutFile code.f`. If you do not specify an output, the code
+will be printed to stdout. You can turn off optimisation with `-n` or `--no-opt` although it will still do some inlining.
 
-Assuming your code is in the file `code.f`, run `cat code.f | ./FORTH c`. The output will be printed on the screen. Copy this into
+To run the code, copy it into
 [this simulator](http://www.cs.ox.ac.uk/people/alex.rogers/Y86-64/) and hit run. The stop of the stack at the end of the
 simulation is denoted by `< RSP` and the bottom is at `0x01f8`

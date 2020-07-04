@@ -84,8 +84,8 @@ instance Show AsmExpr where
 deriving instance Show AsmExpr
 #endif
 
-genCode :: P.Expr -> String
-genCode e = show $ addHardCode $ fullOpt $ unAsm $ fst $ runState (codeGen e) 0
+genCode :: Bool -> P.Expr -> String
+genCode opt e = show $ addHardCode $ (if opt then fullOpt else id) $ unAsm $ fst $ runState (codeGen e) 0
   
 codeMap :: (a -> AsmExpr) -> [a] -> AsmExpr
 codeMap f [] = Nop
