@@ -61,5 +61,9 @@ simulation is denoted by `< RSP` and the bottom is at `0x01f8`
 To test the compiler, run `./FORTH test.f`
 
 ## Quirks
-The order you give the files to the compiler (for now) matters if you don't use `#include file` directives.
-If file `A` relies on functions in file `B`, write `./FORTH B A`
+1. The order you give the files to the compiler (for now) matters if you don't use `#include file` directives.
+   If file `A` relies on functions in file `B`, write `./FORTH B A`
+2. The base pointer and stack pointer share a small stack in the simulator. The base pointer is used to
+   save the call stack. You you find that this makes the stack too small, you can change the initial base
+   pointer address with `-b <address>` or `--base-pointer <number>`
+

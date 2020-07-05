@@ -102,18 +102,21 @@ data CompileSettings = CompSet { mode       :: Plan
                                , inFile     :: Maybe [FilePath]
                                , opt        :: Bool
                                , rlwrap     :: Bool
+                               , largeStack :: Int
                                }
                             deriving (Show)
 
 type Arg = (Argument, HelpText, CompileSettings -> String -> CompileSettings)
 
-initialSettings = CompSet Compile Nothing Nothing True True
+initialSettings = CompSet Compile Nothing Nothing True True 0x180
 
-turnOffOpt, setOutFile, setInFile, setRepl :: CompileSettings -> String -> CompileSettings
+turnOffOpt, setOutFile, setInFile, setRepl, 
+  turnOffRL, largeStk :: CompileSettings -> String -> CompileSettings
 turnOffOpt s _ = s {opt        = False}
 setOutFile s f = s {outputFile = Just f}
 setRepl    s _ = s {mode       = Interactive}
 turnOffRL  s _ = s {rlwrap     = False}
+largeStk   s f = s {largeStack = read f}
 setInFile  s f = case inFile s of
                     (Nothing) -> s {inFile = Just [f]}
                     (Just xs) -> s {inFile = Just (xs ++ [f])}
@@ -137,6 +140,7 @@ long ((Switch _),_,_)  = ""
 globalArgs = [ (Flag "interactive", "Run Repl", setRepl)
              , (Input "output", "Set output file name", setOutFile)
              , (Flag "opt-off", "Turn off optimisation", turnOffOpt)
+             , (Input "base-pointer", "Manually set base pointer initial address", largeStk)
              , (Flag "rlwrap-off", "Turn off rlwrap", turnOffRL)
              ]
 
@@ -217,5 +221,5 @@ main = do
           runLoop stack env m
       else do
         files <- loadFiles (inFile settings)
-        out <- return files >>= return . concatExpr . map (buildExpr . L.tokenise) >>= return . Y.genCode (opt settings)
+        out <- return files >>= return . concatExpr . map (buildExpr . L.tokenise) >>= return . Y.genCode (opt settings) (largeStack settings)
         export (outputFile settings) out

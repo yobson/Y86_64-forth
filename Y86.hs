@@ -118,8 +118,8 @@ instance Show AsmExpr where
 deriving instance Show AsmExpr
 #endif
 
-genCode :: Bool -> P.Expr -> String
-genCode opt e = show $ addHardCode $ (if opt then fullOpt else flattern) $ unAsm $ fst $ runState (codeGen e) (0,[])
+genCode :: Bool -> Int -> P.Expr -> String
+genCode opt bp e = show $ addHardCode bp $ (if opt then fullOpt else flattern) $ unAsm $ fst $ runState (codeGen e) (0,[])
   
 codeMap :: (a -> AsmExpr) -> [a] -> AsmExpr
 codeMap f [] = Nop
@@ -266,11 +266,11 @@ topCode = HardCode ".pos 0\n\tirmovq stack, %rsp\n\tirmovq base, %rbp" :> Irmovq
 mainDef :: AsmExpr
 mainDef = Label "main"
 
-bottomCode :: AsmExpr
-bottomCode = HardCode "halt\n\n.pos 0x200\nstack:\n\n.pos 0x1b0\nbase:\n"
+bottomCode :: Int -> AsmExpr
+bottomCode basePtr = HardCode $"halt\n\n.pos 0x200\nstack:\n\n.pos " ++ show basePtr ++ "\nbase:\n"
 
-addHardCode :: AsmExpr -> AsmExpr
-addHardCode asm = topCode :> addMain asm :> bottomCode
+addHardCode :: Int -> AsmExpr -> AsmExpr
+addHardCode bp asm = topCode :> addMain asm :> bottomCode bp
 
 addMain :: AsmExpr -> AsmExpr
 addMain (Retq :> Label r :> xs) = Retq :> Label r :> addMain xs
