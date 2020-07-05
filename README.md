@@ -48,6 +48,8 @@ You will need a modern version of GHC and cabal. Simply run `make` in the code d
 - To use the interpreter (I assume a unix system), simply run `./FORTH -i` or `./FORTH --interactive`.
 - You can give a files as input and it will load in the functions defined in them and prepare the stack.
 
+When the stack grows, the `^` symbol will point to the stop of the stack.
+
 ### The Compiler
 Assuming your code is in the file `code.f`, run `./FORTH -o OutFile code.f`. If you do not specify an output, the code
 will be printed to stdout. You can turn off optimisation with `-n` or `--no-opt` although it will still do some inlining.

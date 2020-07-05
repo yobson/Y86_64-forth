@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables, DataKinds #-}
+
 module Main (Expr, main) where
 
 import System.IO
@@ -6,7 +8,8 @@ import Parse
 import qualified Y86 as Y
 import System.Environment
 import Control.Monad.State.Lazy
-import Control.Exception (evaluate)
+import System.Exit
+import Control.Exception
 import System.Process 
 
 type Ident = String
@@ -162,15 +165,19 @@ printMem' ((i,v):xs) = putStr i >> putStr " := " >> putStr (show v) >> putStr ",
 
 printMem xs = putStr "[" >> printMem' xs
 
+exitS UserInterrupt = exitSuccess
+exitS e = throw e
+
 runLoop :: Stack -> Env -> Mem -> IO ()
-runLoop s e mem = do
-      putStr "> "
-      expr <- getLine >>= return . buildExpr . L.tokenise
-      let ((s',e'), m) = runState (eval expr s e) mem
-      putStr "Stack: " >> print s'
-      putStr $ if (length s' < 2) then "" else "        ^ Top\n"
-      if (not $ null m) then putStr "VARs: " >> printMem m >> runLoop s' e' m
-      else runLoop s' e' m
+runLoop s e mem = flip catch exitS $ do
+         { putStr "> "
+         ; expr <- getLine >>= return . buildExpr . L.tokenise
+         ; let ((s',e'), m) = runState (eval expr s e) mem
+         ; putStr "Stack: " >> print s'
+         ; putStr $ if (length s' < 2) then "" else "        ^\n"
+         ; if (not $ null m) then putStr "VARs: " >> printMem m >> runLoop s' e' m
+         ; else runLoop s' e' m
+         }
 
 loadFiles :: Maybe [FilePath] -> IO [String]
 loadFiles (Just f) = mapM (\x -> readProcess "cpp" ["-P", "-w", x] []) f
@@ -199,9 +206,9 @@ main = do
   if (args == ["--help"] || args == ["-h"]) then putStrLn $ printHelp globalArgs
   else do
     let settings = parseArgs args initialSettings
-    if (mode settings == Interactive) then
+    if (mode settings == Interactive) then do
       if (rlwrap settings) then 
-        (callCommand $ "rlwrap ./FORTH " ++ (foldr (\x xs -> concat [x, " ", xs]) [] args) ++ "-r")
+        callProcess "rlwrap" $ "./FORTH":"-r":args
       else 
         if (inFile settings == Nothing) then runLoop [] [] []
         else do
