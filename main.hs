@@ -58,8 +58,6 @@ eval (Variable i)          xs  env = case (find i env) of
                                               return (s', env)
                                        (e)                   -> eval e xs env
 
-data Arch = Y86
-
 
 
 primEval :: Ident -> Stack -> Stack
