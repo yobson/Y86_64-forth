@@ -12,6 +12,7 @@ import Control.Monad.State.Lazy (runState)
 import qualified Compiler.Lex    as L
 import           Compiler.Parse
 import qualified Compiler.Y86    as Y
+import           Compiler.Y86.Optimiser (transformForth)
 import           Interpreter
 
 
@@ -21,7 +22,7 @@ data Argument = Flag String | Input String | Switch Char | Group Char Argument
 
 data Plan = Interactive | Compile | Dump DumpOpt deriving Eq
 
-data DumpOpt = Forth deriving Eq
+data DumpOpt = Forth | Forth2 deriving Eq
 
 data CompileSettings = CompSet { mode       :: Plan
                                , outputFile :: Maybe FilePath
@@ -47,6 +48,7 @@ globalArgs = [ (Flag "interactive", "Run Repl", setRepl)
              , (Input "base-pointer", "Manually set base pointer initial address", setBasePtr)
              , (Flag "rlwrap-off", "Turn off rlwrap", turnOffRL)
              , (Group 'd' (Flag "dump-forth"), "Dump Forth AST", setDump Forth)
+             , (Group 'd' (Flag "dump-forth-trans"), "Dump Forth AST after code transformation", setDump Forth2)
              ]
 
 
@@ -165,3 +167,9 @@ main = do
         files <- loadFiles (inFile settings)
         out <- return files >>= return . concatExpr . map (buildExpr . L.tokenise) >>= return . show
         export (outputFile settings) out
+      (Dump Forth2) -> do 
+        files <- loadFiles (inFile settings)
+        out <- return files >>= return . concatExpr . map (buildExpr . L.tokenise)
+        out2 <- return (transformForth out) >>= return . show
+        putStrLn "Forth AST after transformation"
+        export (outputFile settings) out2

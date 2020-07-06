@@ -8,7 +8,7 @@ import           Compiler.Y86.Optimiser
 
 
 genCode :: Bool -> Int -> P.Expr -> String
-genCode opt bp e = show $ addHardCode bp $ (if opt then fullOpt else flattern) $ unAsm $ fst $ runM (codeGen e) (0,[])
+genCode opt bp e = show $ addHardCode bp $ (if opt then fullOpt else flattern) $ unAsm $ fst $ runM (codeGen $ transformForth e) (0,[])
   
 pattern BinOP1 i j op = (P.Val (P.Number i) P.:> P.Val (P.Number j) P.:> P.Val (P.Prim op))
 pattern BinOP2 j op = (P.Val (P.Number j) P.:> P.Val (P.Prim op))

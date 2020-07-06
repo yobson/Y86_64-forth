@@ -69,10 +69,14 @@ data Expr = Val Value
           | CG CodeGen
           | Stmt Statement
           | Expr :> Expr
+          deriving Show
 
 infixr 6 :>
 
-data Statement = If Expr Expr | Set Ident | Nop deriving Show
+data Statement = If Expr Expr
+               | Set Ident 
+               | Nop
+               deriving Show
 
 data Value = Variable Ident 
            | Number Int 
@@ -81,14 +85,16 @@ data Value = Variable Ident
            deriving Show
 
 -- fake instructions for codeGen only
-data CodeGen = CodePop Int deriving Show
+data CodeGen = CodePop Int
+             | BinOp Ident Expr Expr
+             deriving Show
 
-instance Show Expr where
-  show (Closure name pat e) = concat ["Def ", name, "", show pat, "\n", show e, "\nEND ", name]
-  show (Val v) = show v
-  show (CG c)  = show c
-  show (Stmt s) = show s
-  show (e1 :> e2) = concat [show e1, "\n", show e2]
+--instance Show Expr where
+--  show (Closure name pat e) = concat ["Def ", name, "", show pat, "\n", show e, "\nEND ", name]
+--  show (Val v) = show v
+--  show (CG c)  = show c
+--  show (Stmt s) = show s
+--  show (e1 :> e2) = concat [show e1, "\n", show e2]
 
 
 instance Semigroup (Expr) where
@@ -119,11 +125,13 @@ foldValue variable number prim deref (Number i)   = number i
 foldValue variable number prim deref (Prim i)     = prim i
 foldValue variable number prim deref (Deref i)    = deref i
 
-foldCodeGen :: (Int -> a) -> CodeGen -> a
-foldCodeGen codePop (CodePop i) = codePop i
+foldCodeGen :: (Int -> a) -> (Ident -> Expr -> Expr -> a) -> CodeGen -> a
+foldCodeGen codePop binOp (CodePop i) = codePop i
+foldCodeGen codePop binOp (BinOp i e1 e2) = binOp i e1 e2
 
-foldExprVal f = foldExpr f Closure CG stmt (:>)
+foldExprVal f = foldExpr f Closure cg stmt (:>)
   where stmt = Stmt . foldStmt (\x y -> If (foldExprVal f x) (foldExprVal f y)) Set Nop
+        cg   = CG   . foldCodeGen CodePop (\i e1 e2 -> BinOp i (foldExprVal f e1) (foldExprVal f e2))
 
 flattern :: Expr -> Expr
 flattern = foldr1 (\x xs -> x :> xs) . flattern'
