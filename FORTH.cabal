@@ -3,7 +3,7 @@ cabal-version:       >=1.10
 -- For further documentation, see http://haskell.org/cabal/users-guide/
 
 name:                FORTH
-version:             0.1.0.0
+version:             0.1.1.0
 -- synopsis:
 -- description:
 -- bug-reports:
@@ -18,12 +18,19 @@ extra-source-files:  CHANGELOG.md
 
 executable FORTH
   main-is:             main.hs
-  other-modules:       Lex, Parse, Y86
+
+  other-modules:       Compiler.Lex,
+                       Compiler.Parse,
+                       Compiler.Y86,
+                       Compiler.Y86.Types,
+                       Compiler.Y86.Optimiser,
+                       Interpreter
   -- other-extensions:
   build-depends:       base >=4.14 && <4.15,
                        mtl,
                        array,
                        process
-  -- hs-source-dirs:
+
+  hs-source-dirs:      src
   build-tool-depends:  alex:alex, happy:happy
   default-language:    Haskell2010

@@ -1,5 +1,5 @@
 {
-module Lex (tokenise, Token(..)) where
+module Compiler.Lex (tokenise, Token(..)) where
 }
 
 %wrapper "basic"
